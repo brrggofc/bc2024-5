@@ -1,102 +1,137 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const fs = require('fs');
-const path = require('path');
+const express = require("express");
+const { program } = require("commander");
+const fs = require("fs");
+const multer = require("multer");
 
-const app = express();
-const PORT = 3000;
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
-// Використання body-parser для роботи з JSON
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+program
+  .requiredOption("-h, --host <host>")
+  .requiredOption("-p, --port <port>")
+  .requiredOption("-c, --cache <cache>")
+  .parse();
 
-// Шлях до кешу
-const cacheDir = path.join(__dirname, 'cache');
+const options = program.opts();
 
-// Перевіряємо, чи існує кеш, якщо ні — створюємо
-if (!fs.existsSync(cacheDir)) {
-  fs.mkdirSync(cacheDir);
+if (!options.host || !options.port || !options.cache) {
+  console.error(
+    "Error: all parameters (--host, --port, --cache) must be provided."
+  );
+
+  process.exit(1);
 }
 
-// Створення нової нотатки (POST /write)
-app.post('/write', (req, res) => {
-  const { note_name, note } = req.body;
+let notes = {};
 
-  if (!note_name || !note) {
-    return res.status(400).json({ error: 'note_name and note are required' });
+if (fs.existsSync(options.cache)) {
+  try {
+    const data = fs.readFileSync(options.cache, "utf8");
+    const cacheNotes = JSON.parse(data);
+
+    notes = cacheNotes.reduce((acc, { note_name, note }) => {
+      acc[note_name] = { note_name, note };
+      return acc;
+    }, {});
+
+    console.log(`Cache file loaded from ${options.cache}`);
+  } catch (error) {
+    console.error("Error reading cache file:", error);
+    process.exit(1);
+  }
+} else {
+  fs.writeFileSync(options.cache, JSON.stringify([]));
+  console.log(`Cache file created at ${options.cache}`);
+}
+
+const app = express();
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(__dirname));
+
+const saveCache = () => {
+  fs.writeFileSync(
+    options.cache,
+    JSON.stringify(Object.values(notes), null, 2)
+  );
+  console.log(`Cache saved to ${options.cache}`);
+};
+
+app.get("/notes/:name", (req, res) => {
+  // console.log("Request params:", req.params);
+  // console.log("Request headers:", req.headers);
+
+  // const storage = multer.memoryStorage();
+  // const upload = multer({ storage: storage });
+  const noteName = req.params.name;
+  
+  if (notes[noteName]) {
+    // res.status(200).json({ text: notes[noteName].note });
+    res.status(200).send(notes[noteName].note);
+  } else {
+    res.status(404).send("Note not found");
+  }
+});
+
+
+
+app.get("/notes", (req, res) => {
+  const noteList = Object.keys(notes).map((name) => ({
+    name: name,
+    text: notes[name].note,
+  }));
+
+  res.status(200).json(noteList);
+});
+
+
+
+
+app.put("/notes/:name", (req, res) => {
+  const noteName = req.params.name;
+  const newText = req.body.text;
+
+  if (notes[noteName]) {
+    notes[noteName].note = newText;
+    saveCache();
+    res.status(200).send("Note updated");
+  } else {
+    res.status(404).send("Note not found");
+  }
+});
+
+app.delete("/notes/:name", (req, res) => {
+  const noteName = req.params.name;
+
+  if (notes[noteName]) {
+    delete notes[noteName];
+    saveCache();
+    res.status(200).send("Note deleted");
+  } else {
+    res.status(404).send("Note not found");
+  }
+});
+
+
+
+app.post("/write", upload.none(), (req, res) => {
+  const noteName = req.body.note_name || req.body.name;
+  const noteText = req.body.note || req.body.text;
+
+  if (notes[noteName]) {
+    return res.status(400).send("Note with this name already exists");
   }
 
-  const notePath = path.join(cacheDir, `${note_name}.txt`);
-  fs.writeFile(notePath, note, (err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Error writing the note' });
-    }
-    res.status(201).json({ message: 'Note created successfully' });
-  });
+  notes[noteName] = {
+    note_name: noteName,
+    note: noteText,
+  };
+
+  saveCache();
+  res.status(201).send("Note created");
 });
 
-// Отримання списку всіх нотаток (GET /notes)
-app.get('/notes', (req, res) => {
-  fs.readdir(cacheDir, (err, files) => {
-    if (err) {
-      return res.status(500).json({ error: 'Error reading notes directory' });
-    }
-    const notes = files.map(file => file.replace('.txt', ''));
-    res.status(200).json({ notes });
-  });
-});
-
-// Отримання конкретної нотатки (GET /notes/:name)
-app.get('/notes/:name', (req, res) => {
-  const noteName = req.params.name;
-  const notePath = path.join(cacheDir, `${noteName}.txt`);
-
-  fs.readFile(notePath, 'utf8', (err, data) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ error: 'Note not found' });
-      }
-      return res.status(500).json({ error: 'Error reading the note' });
-    }
-    res.status(200).json({ note: data });
-  });
-});
-
-// Оновлення конкретної нотатки (PUT /notes/:name)
-app.put('/notes/:name', (req, res) => {
-  const noteName = req.params.name;
-  const { text } = req.body;
-
-  if (!text) {
-    return res.status(400).json({ error: 'text is required' });
-  }
-
-  const notePath = path.join(cacheDir, `${noteName}.txt`);
-  fs.writeFile(notePath, text, (err) => {
-    if (err) {
-      return res.status(500).json({ error: 'Error updating the note' });
-    }
-    res.status(200).json({ message: 'Note updated successfully' });
-  });
-});
-
-// Видалення конкретної нотатки (DELETE /notes/:name)
-app.delete('/notes/:name', (req, res) => {
-  const noteName = req.params.name;
-  const notePath = path.join(cacheDir, `${noteName}.txt`);
-
-  fs.unlink(notePath, (err) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ error: 'Note not found' });
-      }
-      return res.status(500).json({ error: 'Error deleting the note' });
-    }
-    res.status(200).json({ message: 'Note deleted successfully' });
-  });
-});
-
-// Запуск сервера
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.listen(options.port, options.host, () => {
+  console.log(`Server started on ${options.host}:${options.port}`);
 });
