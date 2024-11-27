@@ -1,17 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Upload Form</title>
+<meta charset="utf-8">
+<title>Upload Form</title>
 </head>
 <body>
-  <h2>Upload Form</h2>
-  <form method="post" action="/write" enctype="multipart/form-data">
-    <label for="note_name">Note Name:</label><br>
-    <input type="text" id="note_name" name="note_name"><br><br>
-    <label for="note">Note:</label><br>
-    <textarea id="note" name="note" rows="4" cols="50"></textarea><br><br>
-    <button type="submit">Submit</button>
-  </form>
+
+<h2>Upload Form</h2>
+
+<form method="post" action="/write" enctype="multipart/form-data">
+  <label for="note_name_input">Note Name:</label><br>
+  <input type="text" id="note_name_input" name="note_name"><br><br>
+
+  <label for="note_input">Note:</label><br>
+  <textarea id="note_input" name="note" rows="4" cols="50"></textarea><br><br>
+
+  <button type="submit">Upload</button>
+</form>
+
+<p>If you click the "Submit" button, the form-data will be sent to the /write endpoint.</p>
+
 </body>
 </html>
