@@ -1,0 +1,43 @@
+{
+    "info": {
+      "name": "Notes Service",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "Get all notes",
+        "request": {
+          "method": "GET",
+          "url": {
+            "raw": "http://127.0.0.1:3000/notes",
+            "protocol": "http",
+            "host": ["127", "0", "0", "1"],
+            "port": "3000",
+            "path": ["notes"]
+          }
+        }
+      },
+      {
+        "name": "Create note",
+        "request": {
+          "method": "POST",
+          "header": [{ "key": "Content-Type", "value": "multipart/form-data" }],
+          "url": {
+            "raw": "http://127.0.0.1:3000/write",
+            "protocol": "http",
+            "host": ["127", "0", "0", "1"],
+            "port": "3000",
+            "path": ["write"]
+          },
+          "body": {
+            "mode": "formdata",
+            "formdata": [
+              { "key": "note_name", "value": "Test Note", "type": "text" },
+              { "key": "note", "value": "This is a test note.", "type": "text" }
+            ]
+          }
+        }
+      }
+    ]
+  }
+  
